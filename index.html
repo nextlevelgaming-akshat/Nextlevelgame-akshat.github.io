@@ -1,0 +1,403 @@
+Akshatgaminghub.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akshat Gaming Hub | 4-Level Tactical Shooter</title>
+    <meta name="description" content="Conquer all 4 levels of increasing difficulty. Use W,A,S,D to move and Mouse Left-Click to shoot. Created by Akshat Shekhawat.">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #020617;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        
+        /*  START SCREEN */
+        #startScreen {
+            position: absolute;
+            width: 800px;
+            height: 500px;
+            background: radial-gradient(circle, #1e1b4b 0%, #020617 100%);
+            border: 3px solid #38bdf8;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.4);
+        }
+        #startScreen h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #a855f7, #f43f5e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+        #playBtn {
+            background: linear-gradient(90deg, #f43f5e, #a855f7);
+            color: white;
+            border: none;
+            padding: 16px 45px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.5);
+            transition: 0.3s;
+        }
+        #playBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(168, 85, 247, 0.8);
+        }
+
+        /*  GAME CONTAINER */
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 500px;
+        }
+        canvas {
+            background: #070a12;
+            border: 3px solid #38bdf8;
+            border-radius: 12px;
+            display: block;
+        }
+
+        /* ⏳ COUNTDOWN OVERLAY */
+        #countdownOverlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 6, 23, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            font-size: 6rem;
+            font-weight: 900;
+            color: #f43f5e;
+            border-radius: 12px;
+            z-index: 5;
+            text-shadow: 0 0 20px rgba(244, 63, 94, 0.6);
+        }
+        #countdownOverlay .sub {
+            font-size: 1.5rem;
+            color: #38bdf8;
+            margin-bottom: 10px;
+            letter-spacing: 3px;
+            font-weight: bold;
+        }
+
+        /*  HUD */
+        #hud {
+            width: 800px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #94a3b8;
+        }
+        .info-span { color: #f43f5e; font-weight: 900; }
+        .lvl-span { color: #38bdf8; font-weight: 900; }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <div>LEVEL: <span id="currentLevelDisplay" class="lvl-span">1</span>/4</div>
+        <div>TARGETS LEFT: <span id="enemyCount" class="info-span">10</span></div>
+    </div>
+
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h1>AKSHAT'S GAUNTLET</h1>
+            <p style="color: #94a3b8; margin-bottom: 30px; letter-spacing: 1px;">Survive 4 Intense Levels of Increasing Difficulty</p>
+            <button id="playBtn" onclick="startLevelSequence(1)">PLAY GAME</button>
+        </div>
+
+        <div id="countdownOverlay">
+            <div class="sub" id="countdownSub">GET READY FOR LEVEL 1</div>
+            <div id="countdownText">3</div>
+        </div>
+
+        <canvas id="battleCanvas" width="800" height="500"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('battleCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const startScreen = document.getElementById('startScreen');
+        const countdownOverlay = document.getElementById('countdownOverlay');
+        const countdownText = document.getElementById('countdownText');
+        const countdownSub = document.getElementById('countdownSub');
+        const enemyCountElement = document.getElementById('enemyCount');
+        const currentLevelDisplay = document.getElementById('currentLevelDisplay');
+
+        let gameRunning = false;
+        let countdownActive = false;
+        
+        // ️ लेवल कॉन्फ़िगरेशन (4 Levels Setting)
+        let currentLevel = 1;
+        const levelSettings = {
+            1: { totalEnemies: 10, enemySpeed: 1.3, spawnRate: 1500, color: '#e11d48' },
+            2: { totalEnemies: 10, enemySpeed: 2.2, spawnRate: 1200, color: '#a855f7' },
+            3: { totalEnemies: 15, enemySpeed: 2.8, spawnRate: 1000, color: '#f59e0b' },
+            4: { totalEnemies: 20, enemySpeed: 3.5, spawnRate: 700,  color: '#34d399' }
+        };
+
+        let scoreInThisLevel = 0;
+        let totalSpawnedInThisLevel = 0;
+        let isGameWonCompletely = false;
+
+        //  प्लेयर डेटा
+        const player = {
+            x: 400,
+            y: 400,
+            radius: 20,
+            speed: 5.5,
+            color: '#38bdf8'
+        };
+
+        let enemies = [];
+        let bullets = [];
+        const keys = {};
+        let mouseX = 0, mouseY = 0;
+        let spawnIntervalTimer = null;
+
+        //  लेवल शुरू करने का काउंटडाउन सीक्वेंस
+        function startLevelSequence(levelNum) {
+            clearInterval(spawnIntervalTimer);
+            gameRunning = false;
+            enemies = [];
+            bullets = [];
+            scoreInThisLevel = 0;
+            totalSpawnedInThisLevel = 0;
+            currentLevel = levelNum;
+            
+            currentLevelDisplay.innerText = currentLevel;
+            enemyCountElement.innerText = levelSettings[currentLevel].totalEnemies;
+
+            startScreen.style.display = 'none';
+            countdownOverlay.style.display = 'flex';
+            countdownActive = true;
+            
+            countdownSub.innerText = `LOADING LEVEL ${currentLevel}`;
+            let count = 3;
+            countdownText.innerText = count;
+
+            let interval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownText.innerText = count;
+                } else if (count === 0) {
+                    countdownText.innerText = "FIGHT! ⚔️";
+                } else {
+                    clearInterval(interval);
+                    countdownOverlay.style.display = 'none';
+                    countdownActive = false;
+                    gameRunning = true;
+                    
+                    // दुश्मन पैदा करने का लूप शुरू करें (लेवल के हिसाब से स्पीड)
+                    spawnSingleEnemy();
+                    spawnIntervalTimer = setInterval(spawnSingleEnemy, levelSettings[currentLevel].spawnRate);
+                }
+            }, 1000);
+        }
+
+        // दुश्मन स्पॉन लॉजिक
+        function spawnSingleEnemy() {
+            if (!gameRunning) return;
+            const settings = levelSettings[currentLevel];
+            if (totalSpawnedInThisLevel >= settings.totalEnemies) return;
+
+            enemies.push({
+                x: Math.random() * (canvas.width - 60) + 30,
+                y: Math.random() * 100 - 50, // स्क्रीन के ऊपर छिपे आएं
+                radius: 18,
+                speed: settings.enemySpeed,
+                color: settings.color
+            });
+            totalSpawnedInThisLevel++;
+        }
+
+        // कीबोर्ड और माउस लिसनर्स
+        window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!gameRunning || e.button !== 0) return;
+
+            const angle = Math.atan2(mouseY - player.y, mouseX - player.x);
+            bullets.push({
+                x: player.x,
+                y: player.y,
+                dx: Math.cos(angle) * 9,
+                dy: Math.sin(angle) * 9,
+                radius: 4,
+                color: '#fbbf24'
+            });
+        });
+
+        // कोर गेम अपडेट
+        function update() {
+            if (!gameRunning) return;
+
+            // प्लेयर मूवमेंट
+            if (keys['w'] || keys['arrowup']) { if (player.y > player.radius) player.y -= player.speed; }
+            if (keys['s'] || keys['arrowdown']) { if (player.y < canvas.height - player.radius) player.y += player.speed; }
+            if (keys['a'] || keys['arrowleft']) { if (player.x > player.radius) player.x -= player.speed; }
+            if (keys['d'] || keys['arrowright']) { if (player.x < canvas.width - player.radius) player.x += player.speed; }
+
+            // गोलियां अपडेट
+            bullets.forEach((bullet, bIndex) => {
+                bullet.x += bullet.dx;
+                bullet.y += bullet.dy;
+                if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+                    bullets.splice(bIndex, 1);
+                }
+            });
+
+            // दुश्मन मूवमेंट और टक्कर ट्रैकिंग
+            const settings = levelSettings[currentLevel];
+            enemies.forEach((enemy, eIndex) => {
+                // दुश्मन प्लेयर का पीछा करेंगे
+                const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+                enemy.x += Math.cos(angle) * enemy.speed;
+                enemy.y += Math.sin(angle) * enemy.speed;
+
+                // प्लेयर से टक्कर -> GAME OVER
+                const distToPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+                if (distToPlayer < player.radius + enemy.radius) {
+                    gameRunning = false;
+                    clearInterval(spawnIntervalTimer);
+                }
+
+                // गोली से टक्कर
+                bullets.forEach((bullet, bIndex) => {
+                    const distToEnemy = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+                    if (distToEnemy < bullet.radius + enemy.radius) {
+                        bullets.splice(bIndex, 1);
+                        enemies.splice(eIndex, 1);
+                        scoreInThisLevel++;
+                        
+                        enemyCountElement.innerText = settings.totalEnemies - scoreInThisLevel;
+
+                        // चेक करें कि क्या करंट लेवल साफ़ हो गया
+                        if (scoreInThisLevel === settings.totalEnemies) {
+                            if (currentLevel < 4) {
+                                // अगला लेवल लोड करें!
+                                startLevelSequence(currentLevel + 1);
+                            } else {
+                                // चारों लेवल साफ़ -> गेम जीत गए!
+                                gameRunning = false;
+                                isGameWonCompletely = true;
+                                clearInterval(spawnIntervalTimer);
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        // गेम रेंडरिंग
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (countdownActive) return;
+
+            // 1. ड्रा प्लेयर
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // प्लेयर की गन
+            const angle = Math.atan2(mouseY - player.y, mouseX - player.x);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y);
+            ctx.lineTo(player.x + Math.cos(angle) * 30, player.y + Math.sin(angle) * 30);
+            ctx.stroke();
+
+            // 2. ड्रा गोलियां
+            bullets.forEach(bullet => {
+                ctx.fillStyle = bullet.color;
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 3. ड्रा दुश्मन
+            enemies.forEach(enemy => {
+                ctx.fillStyle = enemy.color;
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // गुस्सा आंखों का डिजाइन (हार्डर लेवल्स वाइब)
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(enemy.x - 5, enemy.y - 3, 3, 0, Math.PI * 2);
+                ctx.arc(enemy.x + 5, enemy.y - 3, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 4. गेम एंड स्क्रीन (WIN/LOSE)
+            if (!gameRunning && startScreen.style.display === 'none') {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.font = "bold 42px sans-serif";
+                if (isGameWonCompletely) {
+                    ctx.fillStyle = "#10b981";
+                    ctx.fillText(" ULTIMATE CHAMPION COMPLETED ", canvas.width / 2 - 340, canvas.height / 2 - 20);
+                    ctx.font = "22px sans-serif";
+                    ctx.fillStyle = "white";
+                    ctx.fillText("Awesome! You conquered all 4 levels of Akshat's Arena!", canvas.width / 2 - 240, canvas.height / 2 + 40);
+                } else {
+                    ctx.fillStyle = "#ef4444";
+                    ctx.fillText("❌ MISSION FAILED! ELIMINATED ❌", canvas.width / 2 - 300, canvas.height / 2 - 20);
+                    ctx.font = "22px sans-serif";
+                    ctx.fillStyle = "white";
+                    ctx.fillText(`Failed at Level ${currentLevel}. Enemies were too fast!`, canvas.width / 2 - 200, canvas.height / 2 + 40);
+                }
+                ctx.font = "16px sans-serif";
+                ctx.fillStyle = "#94a3b8";
+                ctx.fillText("Refresh the page to restart from Level 1", canvas.width / 2 - 140, canvas.height / 2 + 100);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
+
