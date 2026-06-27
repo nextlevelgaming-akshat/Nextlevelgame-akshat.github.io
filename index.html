@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Akshat's Battle Royale 2D MAX</title>
+    <title>Akshat's Battle Royale 2D Jio Edition</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050b14; font-family: 'Segoe UI', Arial, sans-serif; color: white; user-select: none; }
         #canvas { display: block; background: #0f1b2d; }
@@ -32,14 +32,15 @@
     <div id="killFeed">💀 AKSHAT KILLED DYNAMO!</div>
 
     <div id="menu">
-        <h1>BATTLE ROYALE 2D: MAX</h1>
+        <h1>BATTLE ROYALE 2D: JIO STB</h1>
         <p>
-            <b>कंट्रोल्स:</b><br>
-            • आगे/पीछे/साइड: <b>W, A, S, D</b> या <b>Arrow Keys</b><br>
-            • गन लूट: बॉक्स के पास जाकर <b>[E]</b> दबाएं<br>
-            • गोली मारना: <b>माउस लेफ्ट क्लिक</b> (माउस जिधर घुमाओगे उधर गोली चलेगी)
+            <b>100% जिओ बॉक्स सपोर्ट कंट्रोल्स:</b><br><br>
+            • मैच शुरू करने के लिए: कीबोर्ड का <b>[Enter]</b> बटन दबाएं<br>
+            • आगे/पीछे/साइड चलने के लिए: <b>W, A, S, D</b> या <b>Arrow Keys</b><br>
+            • गन लूटने के लिए: बॉक्स के पास जाकर <b>[E]</b> दबाएं<br>
+            • गोली मारने के लिए: कीबोर्ड का <b>[Spacebar]</b> दबाएं (जिधर चलोगे उधर गोली चलेगी)
         </p>
-        <button class="btn" onclick="start2DBR()">START MATCH</button>
+        <button class="btn" onclick="start2DBR()">START MATCH [Enter]</button>
     </div>
 
     <canvas id="canvas"></canvas>
@@ -51,8 +52,8 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        let player, bullets, enemyBullets, enemies, lootBoxes, particles, keys, mouseX, mouseY;
-        let score, lives, gameActive, enemiesLeft, hasGun, isLanding, altitude;
+        let player, bullets, enemyBullets, enemies, lootBoxes, particles, keys;
+        let score, lives, gameActive, enemiesLeft, hasGun, isLanding, altitude, lastDirX, lastDirY;
 
         const aiNames = [
             "Dynamo", "Scout", "Mortal", "Alpha", "Viper", "Cobra", "Ninja", "Shadow", "Ghost", "Psycho", 
@@ -65,15 +66,14 @@
         function init() {
             player = { x: canvas.width / 2, y: canvas.height / 2, radius: 15, speed: 5, hp: 100 };
             bullets = []; enemyBullets = []; enemies = []; lootBoxes = []; particles = []; keys = {};
-            mouseX = canvas.width/2; mouseY = canvas.height/2;
             gameActive = false; enemiesLeft = 50; hasGun = "none";
-            isLanding = true; altitude = 100; // पैराशूट लैंडिंग इफ़ेक्ट के लिए
+            isLanding = true; altitude = 100;
+            lastDirX = 1; lastDirY = 0; // गोली की शुरुआती दिशा
 
             document.getElementById('enemyCount').innerText = enemiesLeft;
             document.getElementById('gunStatus').innerText = "निहत्थे 👊";
             document.getElementById('healthFill').style.width = '100%';
 
-            // लूटना बॉक्स (Loot Boxes) स्पॉन करना
             const gunTypes = ['M416 🔥', 'AK-47 ⚡', 'AWM Sniper 💥'];
             const gunColors = ['#00ffff', '#ffaa00', '#00ff00'];
             for(let i=0; i<6; i++) {
@@ -87,11 +87,213 @@
                 });
             }
 
-            // 50 एआई दुश्मन स्पॉन करना
             for(let i=0; i<50; i++) {
                 enemies.push({
                     x: Math.random() * canvas.width,
                     y: Math.random() * canvas.height,
                     radius: 12,
-                    speed: Math.random() * 1
-                    
+                    speed: Math.random() * 1.5 + 1,
+                    name: aiNames[i],
+                    lastShot: 0
+                });
+            }
+        }
+
+        function start2DBR() {
+            init();
+            document.getElementById('menu').style.display = 'none';
+            gameActive = true;
+            animate();
+        }
+
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            // जिओ बॉक्स के लिए एंटर बटन से स्टार्ट करने का जुगाड़
+            if(e.code === 'Enter' && !gameActive) {
+                start2DBR();
+            }
+            // स्पेसबार से गोली चलाने का जुगाड़ (बिना माउस के)
+            if(e.code === 'Space' && gameActive && !isLanding && hasGun !== "none") {
+                playerShoot();
+            }
+        });
+        
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function playerShoot() {
+            let angle = Math.atan2(lastDirY, lastDirX);
+            bullets.push({
+                x: player.x, y: player.y,
+                vx: Math.cos(angle) * 10,
+                vy: Math.sin(angle) * 10,
+                color: '#00ffca'
+            });
+        }
+
+        let killFeedTimeout;
+        function triggerKillFeed(name) {
+            const feed = document.getElementById('killFeed');
+            feed.innerHTML = `💥 AKSHAT killed <span style="color:#ffff00;">${name}</span>!`;
+            feed.style.display = 'block';
+            clearTimeout(killFeedTimeout);
+            killFeedTimeout = setTimeout(() => feed.style.display = 'none', 2000);
+        }
+
+        function createExplosion(x, y, color) {
+            for(let i=0; i<10; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    radius: Math.random() * 3 + 1,
+                    alpha: 1,
+                    color: color
+                });
+            }
+        }
+
+        function update() {
+            if (isLanding) {
+                altitude -= 2;
+                if(altitude <= 0) { isLanding = false; }
+                return;
+            }
+
+            let moveX = 0;
+            let moveY = 0;
+
+            // प्लेयर मूवमेंट और दिशा तय करना
+            if (keys['KeyW'] || keys['ArrowUp']) { player.y -= player.speed; moveY = -1; }
+            if (keys['KeyS'] || keys['ArrowDown']) { player.y += player.speed; moveY = 1; }
+            if (keys['KeyA'] || keys['ArrowLeft']) { player.x -= player.speed; moveX = -1; }
+            if (keys['KeyD'] || keys['ArrowRight']) { player.x += player.speed; moveX = 1; }
+
+            // आखिरी मूव की गई दिशा को याद रखना ताकि गोली सही दिशा में चले
+            if (moveX !== 0 || moveY !== 0) {
+                lastDirX = moveX;
+                lastDirY = moveY;
+            }
+
+            if (player.x < 0) player.x = 0; if (player.x > canvas.width) player.x = canvas.width;
+            if (player.y < 0) player.y = 0; if (player.y > canvas.height) player.y = canvas.height;
+
+            let nearBox = false;
+            for(let i = lootBoxes.length - 1; i >= 0; i--) {
+                let box = lootBoxes[i];
+                let dist = Math.hypot(player.x - (box.x + 12), player.y - (box.y + 12));
+                if(dist < 35) {
+                    nearBox = true;
+                    document.getElementById('prompt').innerText = `${box.type} उठाने के लिए [E] दबाएं!`;
+                    if(keys['KeyE']) {
+                        hasGun = box.type;
+                        document.getElementById('gunStatus').innerText = hasGun;
+                        lootBoxes.splice(i, 1);
+                    }
+                }
+            }
+            document.getElementById('prompt').style.display = nearBox ? 'block' : 'none';
+
+            for(let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i]; b.x += b.vx; b.y += b.vy;
+                
+                for(let j = enemies.length - 1; j >= 0; j--) {
+                    let e = enemies[j];
+                    if(Math.hypot(b.x - e.x, b.y - e.y) < e.radius) {
+                        triggerKillFeed(e.name);
+                        createExplosion(e.x, e.y, '#ff3b3b');
+                        enemies.splice(j, 1);
+                        bullets.splice(i, 1);
+                        enemiesLeft--;
+                        document.getElementById('enemyCount').innerText = enemiesLeft;
+                        if(enemiesLeft <= 0) { alert("🏆 BOOYAH! अक्षत आप मैच जीत गए!"); init(); document.getElementById('menu').style.display = 'flex'; }
+                        break;
+                    }
+                }
+                if(b && (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height)) bullets.splice(i, 1);
+            }
+
+            let now = performance.now();
+            for(let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                let distToPlayer = Math.hypot(player.x - e.x, player.y - e.y);
+
+                if(distToPlayer < 400) {
+                    let angle = Math.atan2(player.y - e.y, player.x - e.x);
+                    e.x += Math.cos(angle) * e.speed;
+                    e.y += Math.sin(angle) * e.speed;
+
+                    if(now - e.lastShot > 2500 && distToPlayer < 200) {
+                        enemyBullets.push({
+                            x: e.x, y: e.y,
+                            vx: Math.cos(angle) * 6,
+                            vy: Math.sin(angle) * 6
+                        });
+                        e.lastShot = now;
+                    }
+                }
+            }
+
+            for(let i = enemyBullets.length - 1; i >= 0; i--) {
+                let eb = enemyBullets[i]; eb.x += eb.vx; eb.y += eb.vy;
+
+                if(Math.hypot(eb.x - player.x, eb.y - player.y) < player.radius) {
+                    player.hp -= 10;
+                    document.getElementById('healthFill').style.width = player.hp + '%';
+                    enemyBullets.splice(i, 1);
+                    if(player.hp <= 0) { alert("☠️ मैच ओवर! दुश्मनों ने आपको मार दिया।"); init(); document.getElementById('menu').style.display = 'flex'; }
+                    continue;
+                }
+                if(eb.x < 0 || eb.x > canvas.width || eb.y < 0 || eb.y > canvas.height) enemyBullets.splice(i, 1);
+            }
+
+            for(let i = particles.length - 1; i >= 0; i--) {
+                particles[i].x += particles[i].vx; particles[i].y += particles[i].vy;
+                particles[i].alpha -= 0.03;
+                if(particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (isLanding) {
+                ctx.fillStyle = "rgba(0, 255, 202, 0.2)";
+                ctx.beginPath(); ctx.arc(canvas.width/2, canvas.height/2, altitude * 3, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "#fff"; ctx.font = "26px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText(`🪂 लैंडिंग चालू है... ऊंचाई: ${Math.round(altitude)}m`, canvas.width/2, canvas.height/2);
+                return;
+            }
+
+            lootBoxes.forEach(box => {
+                ctx.fillStyle = box.color; ctx.fillRect(box.x, box.y, box.w, box.h);
+                ctx.strokeStyle = "#fff"; ctx.strokeRect(box.x, box.y, box.w, box.h);
+            });
+
+            enemies.forEach(e => {
+                ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2); ctx.fill();
+            });
+
+            ctx.fillStyle = '#00ffca'; ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2); ctx.fill();
+            
+            // फेसिंग लाइन (जिधर प्लेयर मुड़ेगा)
+            ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.moveTo(player.x, player.y);
+            let angle = Math.atan2(lastDirY, lastDirX);
+            ctx.lineTo(player.x + Math.cos(angle)*20, player.y + Math.sin(angle)*20); ctx.stroke();
+
+            ctx.fillStyle = '#ffff00'; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
+            ctx.fillStyle = '#ff9900'; enemyBullets.forEach(eb => { ctx.beginPath(); ctx.arc(eb.x, eb.y, 3, 0, Math.PI*2); ctx.fill(); });
+
+            particles.forEach(p => {
+                ctx.save(); ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            });
+        }
+
+        function animate() {
+            if(!gameActive) return;
+            update(); draw();
+            requestAnimationFrame(animate);
+        }
+    </script>
+</body>
+</html>
